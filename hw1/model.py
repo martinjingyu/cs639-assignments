@@ -39,7 +39,22 @@ def load_embedding(vocab, emb_file, emb_size):
     Return:
         emb: (np.array), embedding matrix of size (|vocab|, emb_size) 
     """
-    raise NotImplementedError()
+    
+    vovab_size = len(vocab)
+    emb = np.random.uniform(-0.25, 0.25, (vovab_size, emb_size)).astype(np.float32)
+    
+    with open(emb_file, 'r', encoding='utf-8') as f:
+        for line in f:
+            tokens = line.rstrip().split()
+            if len(tokens) != emb_size + 1:
+                continue
+            word = tokens[0]
+            if word in vocab.word2id:
+                idx = vocab.word2id[word]
+                emb[idx] = np.array(tokens[1:], dtype=np.float32)
+
+    return emb
+
 
 
 class DanModel(BaseModel):
@@ -57,13 +72,39 @@ class DanModel(BaseModel):
         Define the model's parameters, e.g., embedding layer, feedforward layer.
         Pass hyperparameters explicitly or use self.args to access the hyperparameters.
         """
-        raise NotImplementedError()
+        args = self.args
+
+        self.embedding = nn.Embedding(
+            len(self.vocab),
+            args.emb_size,
+            padding_idx=self.vocab['<pad>']
+        )
+
+        self.hidden_layers = nn.ModuleList()
+        for i in range(args.hid_layer):
+            in_size = args.emb_size if i == 0 else args.hid_size
+            self.hidden_layers.append(
+                nn.Sequential(
+                    nn.Linear(in_size, args.hid_size),
+                    nn.ReLU(),
+                    nn.Dropout(args.hid_drop)
+                )
+            )
+
+        self.output_layer = nn.Linear(args.hid_size, self.tag_size)
 
     def init_model_parameters(self):
         """
         Initialize the model's parameters by uniform sampling from a range [-v, v], e.g., v=0.08
         Pass hyperparameters explicitly or use self.args to access the hyperparameters.
         """
+        v = 0.08
+        
+        for param in self.parameters():
+            if param.dim() > 1:
+                nn.init.uniform_(param, -v, v)
+            else:
+                nn.init.zeros_(param)
         raise NotImplementedError()
 
     def copy_embedding_from_numpy(self):
@@ -71,7 +112,8 @@ class DanModel(BaseModel):
         Load pre-trained word embeddings from numpy.array to nn.embedding
         Pass hyperparameters explicitly or use self.args to access the hyperparameters.
         """
-        raise NotImplementedError()
+        emb = load_embedding(self.vocab, self.args.emb_file, self.args.emb_size)
+        self.embedding.weight.data.copy_(torch.from_numpy(emb))
 
     def forward(self, x):
         """
@@ -84,4 +126,26 @@ class DanModel(BaseModel):
         Return:
             scores: (torch.FloatTensor), [batch_size, ntags]
         """
-        raise NotImplementedError()
+        
+        emb = self.embedding(x)  # [B, T, D]
+
+        pad_id = self.vocab['<pad>']
+        mask = (x != pad_id).float().unsqueeze(-1)  # [B, T, 1]
+        emb = emb * mask
+
+        if self.args.pooling_method == "sum":
+            sent_emb = emb.sum(dim=1)
+
+        elif self.args.pooling_method == "avg":
+            sent_emb = emb.sum(dim=1) / mask.sum(dim=1).clamp(min=1)
+
+        elif self.args.pooling_method == "max":
+            emb = emb.masked_fill(mask == 0, -1e9)
+            sent_emb, _ = emb.max(dim=1)
+
+        h = sent_emb
+        for layer in self.hidden_layers:
+            h = layer(h)
+
+        scores = self.output_layer(h)
+        return scores
