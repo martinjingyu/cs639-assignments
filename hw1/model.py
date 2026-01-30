@@ -105,7 +105,6 @@ class DanModel(BaseModel):
                 nn.init.uniform_(param, -v, v)
             else:
                 nn.init.zeros_(param)
-        raise NotImplementedError()
 
     def copy_embedding_from_numpy(self):
         """
