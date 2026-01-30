@@ -23,7 +23,7 @@ class BaseModel(nn.Module):
     def load(self, path):
         # Load model
         print(f'Loading model from {path}')
-        ckpt = torch.load(path)
+        ckpt = torch.load(path, weights_only=False)
         self.vocab = ckpt['vocab']
         self.args = ckpt['args']
         self.load_state_dict(ckpt['state_dict'])
