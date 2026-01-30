@@ -15,7 +15,7 @@ def get_args():
     parser.add_argument("--train", type=str, default="data/sst-train.txt")
     parser.add_argument("--dev", type=str, default="data/sst-dev.txt")
     parser.add_argument("--test", type=str, default="data/sst-test.txt")
-    parser.add_argument("--emb_file", type=str, default=None)
+    parser.add_argument("--emb_file", type=str, default="glove.6B.300d.txt")
     parser.add_argument("--emb_size", type=int, default=300)
     parser.add_argument("--hid_size", type=int, default=300)
     parser.add_argument("--hid_layer", type=int, default=3)
