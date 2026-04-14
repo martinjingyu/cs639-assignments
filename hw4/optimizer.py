@@ -38,8 +38,7 @@ class AdamW(Optimizer):
                 if grad.is_sparse:
                     raise RuntimeError("Adam does not support sparse gradients, please consider SparseAdam instead")
 
-                raise NotImplementedError()
-
+                
                 # State should be stored in this dictionary
                 state = self.state[p]
 
@@ -47,14 +46,40 @@ class AdamW(Optimizer):
                 alpha = group["lr"]
 
                 # Update first and second moments of the gradients
+                beta1, beta2 = group["betas"]
+                eps = group["eps"]
+                
+                if len(state) == 0:
+                    state["step"] = 0
+                    state["exp_avg"] = torch.zeros_like(p.data)
+                    state["exp_avg_sq"] = torch.zeros_like(p.data)
+                    
+                state["step"] += 1
+                exp_avg, exp_avg_sq = state["exp_avg"], state["exp_avg_sq"]
+                
+                
+                exp_avg.mul_(beta1).add_(grad, alpha=1 - beta1)
+                exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1 - beta2)
+                
+                
+                step = state["step"]
+                bias_correction1 = 1 - beta1 ** step
+                bias_correction2 = 1 - beta2 ** step
+                step_size = alpha * (bias_correction2 ** 0.5) / bias_correction1
+                
+                
 
                 # Bias correction
                 # Please note that we are using the "efficient version" given in
                 # https://arxiv.org/abs/1412.6980
 
                 # Update parameters
-
+                
+                p.data.addcdiv_(exp_avg, exp_avg_sq.sqrt().add_(eps), value=-step_size)
                 # Add weight decay after the main gradient-based updates.
+                
+                if group["weight_decay"] != 0:
+                    p.data.add_(p.data, alpha=-group["weight_decay"] * alpha)
                 # Please note that the learning rate should be incorporated into this update.
 
         return loss
